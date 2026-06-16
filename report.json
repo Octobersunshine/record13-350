@@ -1,0 +1,96 @@
+{
+  "generated_at": "2026-06-16T11:34:04.227377",
+  "summary": {
+    "total_tables": 3,
+    "passed": 1,
+    "failed": 2,
+    "total_errors": 5
+  },
+  "results": [
+    {
+      "table": "departments",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "table": "users",
+      "passed": false,
+      "errors": [
+        {
+          "error_type": "REQUIRED_NULL",
+          "table": "users",
+          "column": "email",
+          "message": "存在 1 条空值记录",
+          "details": {
+            "null_count": 1,
+            "sample_indices": [
+              2
+            ]
+          }
+        },
+        {
+          "error_type": "FK_NOT_FOUND",
+          "table": "users",
+          "column": "dept_id",
+          "message": "存在 1 条外键在 'departments' 中未找到",
+          "details": {
+            "missing_count": 1,
+            "referenced_table": "departments",
+            "sample_missing": [
+              {
+                "dept_id": 999.0
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "table": "orders",
+      "passed": false,
+      "errors": [
+        {
+          "error_type": "PK_DUPLICATE",
+          "table": "orders",
+          "column": "order_id",
+          "message": "发现 1 条主键重复记录",
+          "details": {
+            "duplicate_count": 1,
+            "sample_duplicates": [
+              {
+                "order_id": 1003
+              }
+            ]
+          }
+        },
+        {
+          "error_type": "REQUIRED_NULL",
+          "table": "orders",
+          "column": "amount",
+          "message": "存在 1 条空值记录",
+          "details": {
+            "null_count": 1,
+            "sample_indices": [
+              2
+            ]
+          }
+        },
+        {
+          "error_type": "FK_NOT_FOUND",
+          "table": "orders",
+          "column": "user_id",
+          "message": "存在 1 条外键在 'users' 中未找到",
+          "details": {
+            "missing_count": 1,
+            "referenced_table": "users",
+            "sample_missing": [
+              {
+                "user_id": 6
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

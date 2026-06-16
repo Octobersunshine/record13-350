@@ -1,4 +1,6 @@
+import json
 import pandas as pd
+from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from dataclasses import dataclass, field
 
@@ -15,6 +17,15 @@ class ValidationError:
         col = f".{self.column}" if self.column else ""
         return f"[{self.error_type}] {self.table}{col}: {self.message}"
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "error_type": self.error_type,
+            "table": self.table,
+            "column": self.column,
+            "message": self.message,
+            "details": self.details,
+        }
+
 
 @dataclass
 class ValidationResult:
@@ -28,6 +39,13 @@ class ValidationResult:
         for err in self.errors:
             lines.append(f"  {err}")
         return "\n".join(lines)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "table": self.table,
+            "passed": self.passed,
+            "errors": [e.to_dict() for e in self.errors],
+        }
 
 
 @dataclass
@@ -245,3 +263,132 @@ class DataValidator:
             )
             results.append(result)
         return results
+
+
+class ReportExporter:
+    def __init__(self, results: List[ValidationResult]):
+        self.results = results
+
+    def _build_report_data(self) -> Dict[str, Any]:
+        total = len(self.results)
+        passed = sum(1 for r in self.results if r.passed)
+        failed = total - passed
+        total_errors = sum(len(r.errors) for r in self.results)
+        return {
+            "generated_at": datetime.now().isoformat(),
+            "summary": {
+                "total_tables": total,
+                "passed": passed,
+                "failed": failed,
+                "total_errors": total_errors,
+            },
+            "results": [r.to_dict() for r in self.results],
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self._build_report_data(), indent=indent, ensure_ascii=False)
+
+    def export_json(self, filepath: str, indent: int = 2) -> None:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(self.to_json(indent))
+
+    def to_html(self) -> str:
+        data = self._build_report_data()
+        summary = data["summary"]
+        rows_html = []
+        for r in data["results"]:
+            status_cls = "pass" if r["passed"] else "fail"
+            status_text = "PASS" if r["passed"] else "FAIL"
+            errors_html = ""
+            if r["errors"]:
+                error_items = []
+                for e in r["errors"]:
+                    details_str = ""
+                    if e["details"]:
+                        detail_rows = "".join(
+                            f'<tr><td class="detail-key">{k}</td><td class="detail-val">{v}</td></tr>'
+                            for k, v in e["details"].items()
+                        )
+                        details_str = (
+                            '<table class="detail-table">'
+                            + detail_rows
+                            + "</table>"
+                        )
+                    error_items.append(
+                        f'<tr><td class="err-type">{e["error_type"]}</td>'
+                        f'<td>{e["column"] or ""}</td>'
+                        f'<td>{e["message"]}</td>'
+                        f'<td>{details_str}</td></tr>'
+                    )
+                errors_html = (
+                    '<table class="error-table">'
+                    '<tr><th>错误类型</th><th>列</th><th>消息</th><th>详情</th></tr>'
+                    + "".join(error_items)
+                    + "</table>"
+                )
+            else:
+                errors_html = '<span class="no-error">无错误</span>'
+            rows_html.append(
+                f'<tr><td>{r["table"]}</td>'
+                f'<td class="{status_cls}">{status_text}</td>'
+                f'<td>{errors_html}</td></tr>'
+            )
+
+        return (
+            "<!DOCTYPE html>"
+            '<html lang="zh-CN"><head><meta charset="UTF-8">'
+            "<title>数据完整性校验报告</title>"
+            "<style>"
+            "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+            "margin:40px;background:#f5f7fa;color:#333}"
+            "h1{color:#1a1a2e;border-bottom:2px solid #4361ee;padding-bottom:8px}"
+            ".summary{display:flex;gap:20px;margin:20px 0}"
+            ".summary-card{background:#fff;border-radius:8px;padding:16px 24px;"
+            "box-shadow:0 2px 8px rgba(0,0,0,.08);text-align:center;min-width:120px}"
+            ".summary-card .num{font-size:28px;font-weight:700}"
+            ".summary-card .label{font-size:13px;color:#666;margin-top:4px}"
+            ".summary-card.total .num{color:#4361ee}"
+            ".summary-card.pass .num{color:#2ecc71}"
+            ".summary-card.fail .num{color:#e74c3c}"
+            ".summary-card.err .num{color:#f39c12}"
+            "table.main-table{width:100%;border-collapse:collapse;background:#fff;"
+            "border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}"
+            "table.main-table th{background:#1a1a2e;color:#fff;padding:12px 16px;text-align:left}"
+            "table.main-table td{padding:12px 16px;border-bottom:1px solid #eee;vertical-align:top}"
+            "table.main-table tr:last-child td{border-bottom:none}"
+            ".pass{color:#2ecc71;font-weight:700}"
+            ".fail{color:#e74c3c;font-weight:700}"
+            "table.error-table{width:100%;border-collapse:collapse;margin-top:8px;"
+            "font-size:13px;border:1px solid #ddd;border-radius:4px}"
+            "table.error-table th{background:#f8f9fa;padding:6px 10px;text-align:left;"
+            "border-bottom:1px solid #ddd;color:#555}"
+            "table.error-table td{padding:6px 10px;border-bottom:1px solid #eee}"
+            ".err-type{white-space:nowrap;font-weight:600;color:#e74c3c}"
+            "table.detail-table{border-collapse:collapse;font-size:12px;margin-top:4px}"
+            "table.detail-table td{padding:2px 8px;border:1px solid #ddd}"
+            ".detail-key{font-weight:600;background:#f8f9fa;white-space:nowrap}"
+            ".detail-val{color:#555}"
+            ".no-error{color:#999;font-style:italic}"
+            ".timestamp{color:#999;font-size:13px;margin-top:8px}"
+            "</style></head><body>"
+            "<h1>数据完整性校验报告</h1>"
+            f'<div class="timestamp">生成时间：{data["generated_at"]}</div>'
+            '<div class="summary">'
+            f'<div class="summary-card total"><div class="num">{summary["total_tables"]}</div>'
+            '<div class="label">校验表数</div></div>'
+            f'<div class="summary-card pass"><div class="num">{summary["passed"]}</div>'
+            '<div class="label">通过</div></div>'
+            f'<div class="summary-card fail"><div class="num">{summary["failed"]}</div>'
+            '<div class="label">失败</div></div>'
+            f'<div class="summary-card err"><div class="num">{summary["total_errors"]}</div>'
+            '<div class="label">错误总数</div></div>'
+            "</div>"
+            '<table class="main-table">'
+            "<tr><th>表名</th><th>状态</th><th>错误详情</th></tr>"
+            + "".join(rows_html)
+            + "</table></body></html>"
+        )
+
+    def export_html(self, filepath: str) -> None:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(self.to_html())

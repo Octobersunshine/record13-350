@@ -1,5 +1,5 @@
 import pandas as pd
-from data_validator import DataValidator, ForeignKeyRule
+from data_validator import DataValidator, ForeignKeyRule, ReportExporter
 
 
 def main():
@@ -89,6 +89,14 @@ def main():
         print(f"消息: {err.message}")
         if err.details:
             print(f"详情: {err.details}")
+
+    exporter = ReportExporter(results)
+
+    exporter.export_json("report.json")
+    print("\nJSON 报告已导出: report.json")
+
+    exporter.export_html("report.html")
+    print("HTML 报告已导出: report.html")
 
 
 if __name__ == "__main__":
