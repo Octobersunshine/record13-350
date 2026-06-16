@@ -63,16 +63,30 @@ class DataValidator:
         if errors:
             return errors
 
-        duplicated = df[df.duplicated(subset=pk_columns, keep=False)]
-        if not duplicated.empty:
-            dup_count = len(duplicated)
-            dup_values = duplicated[pk_columns].drop_duplicates().head(10).to_dict('records')
+        pk_values = df[pk_columns].itertuples(index=False, name=None)
+        seen: set = set()
+        dup_values: set = set()
+        dup_count = 0
+        for val in pk_values:
+            if val in seen:
+                dup_count += 1
+                dup_values.add(val)
+            else:
+                seen.add(val)
+
+        if dup_count > 0:
+            sample = list(dup_values)[:10]
             errors.append(ValidationError(
                 error_type="PK_DUPLICATE",
                 table=table_name,
                 column=",".join(pk_columns),
                 message=f"发现 {dup_count} 条主键重复记录",
-                details={"duplicate_count": dup_count, "sample_duplicates": dup_values}
+                details={
+                    "duplicate_count": dup_count,
+                    "sample_duplicates": [
+                        dict(zip(pk_columns, v)) for v in sample
+                    ]
+                }
             ))
 
         return errors
